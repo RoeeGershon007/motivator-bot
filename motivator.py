@@ -20,5 +20,5 @@ def webhook():
     return str(response)
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))  # Render מספק את PORT בסביבת הפעלה
+    port = int(os.environ.get("PORT", 10000))  # Render נותנת את הפורט כמשתנה סביבה
     app.run(host="0.0.0.0", port=port)
