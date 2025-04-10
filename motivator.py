@@ -4,29 +4,50 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 
-# קריאת משתנים מהסביבה
+# Logging helper
+def log(msg):
+    print(f"[MotivatorBot] {msg}")
+
+log("Starting MotivatorBot...")
+
+# Load environment variables
 GOOGLE_SHEET_NAME = os.getenv("GOOGLE_SHEET_NAME")
 TAB_NAME = os.getenv("TAB_NAME")
-RECIPIENT_NUMBER = os.getenv("RECIPIENT_NUMBER")
-TWILIO_PHONE_NUMBER = os.getenv("TWILIO_PHONE_NUMBER")
-TWILIO_AUTH_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
-TWILIO_SID = os.getenv("TWILIO_SID")
 
-# הגדרת הרשאות גישה לגוגל שיטס
+log(f"GOOGLE_SHEET_NAME: {GOOGLE_SHEET_NAME}")
+log(f"TAB_NAME: {TAB_NAME}")
+
+# Authenticate with Google Sheets
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
 client_gs = gspread.authorize(creds)
 
-# הדפסה לדיבאג
-print("Available spreadsheets:")
-print([s.title for s in client_gs.openall()])
-print("Trying to open sheet:", GOOGLE_SHEET_NAME)
-print("Trying to open tab:", TAB_NAME)
+# Debug available spreadsheets
+log("Attempting to list available spreadsheets...")
+try:
+    available_sheets = client_gs.openall()
+    log(f"Available spreadsheets (count: {len(available_sheets)}): {[s.title for s in available_sheets]}")
+except Exception as e:
+    log(f"Failed to list spreadsheets: {e}")
 
-# פתיחת הגיליון והטאב
-sheet = client_gs.open(GOOGLE_SHEET_NAME).worksheet(TAB_NAME)
+# Try to access the spreadsheet
+try:
+    log(f"Trying to open sheet: {GOOGLE_SHEET_NAME}")
+    sheet = client_gs.open(GOOGLE_SHEET_NAME).worksheet(TAB_NAME)
+    log(f"Successfully opened tab: {TAB_NAME}")
+except gspread.SpreadsheetNotFound as e:
+    log("SpreadsheetNotFound: The bot could not find the spreadsheet.")
+    log(str(e))
+except gspread.WorksheetNotFound as e:
+    log("WorksheetNotFound: The bot could not find the worksheet/tab.")
+    log(str(e))
+except Exception as e:
+    log(f"Other error occurred while accessing the sheet: {e}")
 
-# הכנסת שורת תיעוד
-today = datetime.now().strftime("%Y-%m-%d %H:%M")
-sheet.append_row([today, "Reminder sent"])
-print("Reminder logged for", today)
+# Optional: Insert a sample log
+try:
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    sheet.append_row([now, "Test log from updated motivator.py"])
+    log("Appended test row successfully.")
+except Exception as e:
+    log(f"Failed to append row: {e}")
