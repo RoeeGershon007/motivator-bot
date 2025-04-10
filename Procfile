@@ -1,1 +1,1 @@
-web: python3 motivator.py
+web: python motivator.py
