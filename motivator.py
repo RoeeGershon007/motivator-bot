@@ -1,73 +1,56 @@
 
+import os
 from flask import Flask
+from datetime import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-from datetime import datetime
 from twilio.rest import Client
-import os
 
 app = Flask(__name__)
 
-# הגדרות קבועות
-SCOPE = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-CREDS_FILE = "credentials.json"
 GOOGLE_SHEET_NAME = "Motivator Tracker"
 TAB_NAME = "Daily Log"
 
-# Twilio - משתנים מתוך Environment
-TWILIO_SID = os.getenv("TWILIO_SID")
-TWILIO_AUTH = os.getenv("TWILIO_AUTH")
-TWILIO_FROM = os.getenv("TWILIO_FROM")
-USER_PHONE = os.getenv("USER_PHONE")
-
-# חיבור לגוגל שיטס
-creds = ServiceAccountCredentials.from_json_keyfile_name(CREDS_FILE, SCOPE)
+scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+creds = ServiceAccountCredentials.from_json_keyfile_name("credentials.json", scope)
 client_gs = gspread.authorize(creds)
 sheet = client_gs.open(GOOGLE_SHEET_NAME).worksheet(TAB_NAME)
 
-# שליחת הודעה בוואטסאפ
-def send_whatsapp_message(body):
-    client_twilio = Client(TWILIO_SID, TWILIO_AUTH)
-    client_twilio.messages.create(
-        from_=TWILIO_FROM,
-        body=body,
-        to=USER_PHONE
-    )
+# הגדרות ל-Twilio
+TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_AUTH = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_FROM = os.getenv("TWILIO_FROM")
+TWILIO_TO = os.getenv("TWILIO_TO")
+client_twilio = Client(TWILIO_SID, TWILIO_AUTH)
 
-# שליחת תזכורת
-@app.route("/send_reminder", methods=["GET"])
-def send_reminder():
-    now = datetime.now()
-    sheet.append_row([
-        now.strftime("%Y-%m-%d"),
-        now.strftime("%H:%M:%S"),
-        "Reminder Sent",
-        "No"
-    ])
-    return "Reminder logged successfully."
+def log_reminder():
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    row = [now, "Reminder sent"]
+    sheet.append_row(row)
 
-# שליחת נודניק אם אין תגובה
-@app.route("/send_nudge", methods=["GET"])
 def send_nudge():
+    message = client_twilio.messages.create(
+        from_=TWILIO_FROM,
+        to=TWILIO_TO,
+        body="🤖 אל תשכח לרשום אם שתית מים, לקחת ויטמינים, חלבון וקריאטין!"
+    )
+    return message.sid
+
+@app.route("/send_reminder")
+def send_reminder():
     try:
-        records = sheet.get_all_records()
-        today = datetime.now().strftime("%Y-%m-%d")
-        for row in reversed(records):
-            if row["Date"] == today:
-                if row.get("Did you respond?", "").lower() not in ["yes", "בוצע"]:
-                    send_whatsapp_message("היי! לא ראינו שענית לתזכורת של הבוקר 😅 שתית מים? לקחת ויטמינים? כתבת בתיעוד?")
-                    sheet.append_row([
-                        today,
-                        datetime.now().strftime("%H:%M:%S"),
-                        "Nudge Sent",
-                        ""
-                    ])
-                    return "Nudge sent and logged.", 200
-                else:
-                    return "User already responded – no nudge needed.", 200
-        return "No reminder found for today.", 404
+        log_reminder()
+        return "Reminder logged successfully."
     except Exception as e:
-        return f"Error: {str(e)}", 500
+        return f"Error: {e}"
+
+@app.route("/send_nudge")
+def send_nudge_route():
+    try:
+        sid = send_nudge()
+        return f"Nudge sent. SID: {sid}"
+    except Exception as e:
+        return f"Error: {e}"
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    app.run()
